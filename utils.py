@@ -6,6 +6,8 @@ import json
 from torch.nn import Parameter
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from nltk.translate import bleu_score
+import torch.nn.functional as F
+import transformer
 
 
 def get_sequences_lengths(sequences, masking=0, dim=1):
@@ -68,41 +70,9 @@ def get_pretrained_embeddings(embeddings_dir):
     emb_tensor = torch.FloatTensor(embeddings)
     return emb_tensor
 
-
-
-def save_checkpoint(best_epoch, best_model, best_optimizer,
-                    epoch, model, optimizer, train_loss, val_loss, metrics,
-                    params, file):
-    '''
-    saves model into a state dict, along with its training statistics,
-    and parameters
-    :param best_epoch:
-    :param best_model:
-    :param best_optimizer:
-    :param epoch:
-    :param model:
-    :param optimizer:
-    :param train_loss:
-    :param val_loss:
-    :param metrics:
-    :param params:
-    :param file:
-    :return:
-    '''
-    state = {
-        'best_model': best_model.state_dict(),
-        'best_optimizer': best_optimizer.state_dict(),
-        'model': model.state_dict(),
-        'optimizer' : optimizer.state_dict(),
-        'best_epoch': best_epoch,
-        'epoch' : epoch,
-        'train_loss' : train_loss,
-        'val_loss' : val_loss,
-        'metrics' : metrics,
-        'params' : params,
-        'file' : file,
-        }
-    torch.save(state, file["model_filename"])
+def save_args(filename, args):
+    with open(filename, 'w') as f:
+        json.dump(vars(args), f, indent=4)
 
 def load_args(filename, args):
     '''
@@ -115,21 +85,55 @@ def load_args(filename, args):
     if os.path.isfile(filename):
         with open(filename, 'r') as f:
             checkpoint = json.load(f)
-        args.batch_size = checkpoint["batch_size"]
-        #args. = checkpoint[""]
-        args.attention = checkpoint["attention"]
-        args.pretrained_embeddings_file = checkpoint["pretrained_embeddings_file"]
-        args.weight_decay = checkpoint["weight_decay"]
-        args.learning_rate = checkpoint["learning_rate"]
-        args.max_len = checkpoint["max_len"]
-        args.gradient_accumulation_steps = checkpoint["gradient_accumulation_steps"]
-        args.warmup_proportion = checkpoint["warmup_proportion"]
-        #args. = checkpoint[" "]
+
+        # embedding dim
+        args.embedding_dim = checkpoint["embedding_dim"]
+        args.pretrained_embeddings_dir = None
+        # model_dim
+        args.model_dim = checkpoint["model_dim"]
+        # inner_dim
+        args.inner_dim = checkpoint["inner_dim"]
+        # num_layers
+        args.num_layers = checkpoint["num_layers"]
+        # num_heads
+        args.num_heads = checkpoint["num_heads"]
+        # dim_k
+        args.dim_k = checkpoint["dim_k"]
+        # dim_v
+        args.dim_v = checkpoint["dim_v"]
+        # dropout
+        args.dropout = checkpoint["dropout"]
+        # history len
+        args.history_len = checkpoint["history_len"]
+        # response_len
+        args.response_len = checkpoint["response_len"]
 
     else:
         raise ValueError("no file found at {}".format(filename))
     return checkpoint
 
+def save_checkpoint(filename, best_epoch, best_model, best_optimizer,
+                    epoch, model, optimizer):
+    '''
+    saves model into a state dict, along with its training statistics,
+    and parameters
+    :param best_epoch:
+    :param best_model:
+    :param best_optimizer:
+    :param epoch:
+    :param model:
+    :param optimizer:
+    :return:
+    '''
+    state = {
+        'best_model': best_model.state_dict(),
+        'best_optimizer': best_optimizer.state_dict(),
+        'model': model.state_dict(),
+        'optimizer' : optimizer.state_dict(),
+        'best_epoch': best_epoch,
+        'epoch' : epoch,
+        }
+    torch.save(state, filename)
 
 def load_checkpoint(filename, model, optimizer, use_best_model = True):
     '''
@@ -190,32 +194,6 @@ def encoder_accuracy(targets, predicted):
         token_acc)
     return sentence_accuracy, token_accuracy
 
-
-def add_negatve_class(outputs):
-    '''
-
-    :param outputs:
-    :return:
-    '''
-    neg_prob = variable(torch.ones(outputs.size())) - outputs
-    outputs = torch.cat((neg_prob, outputs), 1)
-    return outputs
-
-
-def classifier_accuracy(targets, predicted):
-    '''
-    calculates accuracy, precision, recall, and F1
-    :param targets: numpy array of actual labels
-    :param predicted: numpu array of predicted labels
-    :return: accuracy, precision, recall, f1
-    '''
-    accuracy = accuracy_score(targets, predicted)
-    precision = precision_score(targets, predicted)
-    recall = recall_score(targets, predicted)
-    f1 = f1_score(targets, predicted)
-    return accuracy, precision, recall, f1
-
-
 def bleu(targets, predicted, n_grams=4):
     '''
     calculates bleu score
@@ -236,17 +214,38 @@ def bleu(targets, predicted, n_grams=4):
         smoothing_function=chencherry.method1)
     return bleu_1
 
-def check_files(file):
-    '''
-    checks the output directories to make sure they exist. if they dont,
-    then they are created
-    :param file: dictionary of files that incude the project file, and model
-        group
-    :return:
-    '''
-    outputs = '{}{}_outputs'.format(file["project_file"], file["model_group"])
-    models = '{}{}s'.format(file["project_file"], file["model_group"])
-    if os.path.isfile(outputs):
-        os.mkdir(outputs)
-    if not os.path.isfile(models):
-        os.mkdir(models)
+
+def cal_performance(pred, gold, smoothing=False):
+    ''' Apply label smoothing if needed '''
+
+    loss = cal_loss(pred, gold, smoothing)
+
+    pred = pred.max(1)[1]
+    gold = gold.contiguous().view(-1)
+    non_pad_mask = gold.ne(transformer.Constants.PAD)
+    n_correct = pred.eq(gold)
+    n_correct = n_correct.masked_select(non_pad_mask).sum().item()
+
+    return loss, n_correct
+
+
+def cal_loss(pred, gold, smoothing):
+    ''' Calculate cross entropy loss, apply label smoothing if needed. '''
+
+    gold = gold.contiguous().view(-1)
+
+    if smoothing:
+        eps = 0.1
+        n_class = pred.size(1)
+
+        one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
+        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+        log_prb = F.log_softmax(pred, dim=1)
+
+        non_pad_mask = gold.ne(transformer.Constants.PAD)
+        loss = -(one_hot * log_prb).sum(dim=1)
+        loss = loss.masked_select(non_pad_mask).sum()  # average later
+    else:
+        loss = F.cross_entropy(pred, gold, ignore_index=transformer.Constants.PAD, reduction='sum')
+
+    return loss
