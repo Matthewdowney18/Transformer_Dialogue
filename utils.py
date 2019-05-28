@@ -10,6 +10,53 @@ import torch.nn.functional as F
 import transformer
 
 
+class ModelConfig:
+    def __init__(self, args):
+        self.history_len = args.history_len
+        self.response_len = args.response_len
+        self.embedding_dim = args.embedding_dim
+        self.model_dim = args.model_dim
+        self.inner_dim = args.inner_dim,
+        self.num_layers = args.num_layers,
+        self.num_heads = args.num_heads,
+        self.dim_k = args.dim_k,
+        self.dim_v = args.dim_v,
+        self.dropout = args.dropout
+
+        self.min_count = args.min_count
+        self.train_batch_size = args.train_batch_size
+        self.val_batch_size = args.val_batch_size
+        self.warmup_steps = args.warmup_steps
+        self.a_nice_note = args.a_nice_note
+        self.label_smoothing = args.label_smoothing
+
+    def load_from_file(self, filename):
+        with open(filename, 'r') as f:
+            config = json.load(f)
+
+        self.history_len = config["history_len"]
+        self.response_len = config["response_len"]
+        self.embedding_dim = config["embedding_dim"]
+        self.model_dim = config["model_dim"]
+        self.inner_dim = config["inner_dim"]
+        self.num_layers = config["num_layers"]
+        self.num_heads = config["num_heads"]
+        self.dim_k = config["dim_k"]
+        self.dim_v = config["dim_v"]
+        self.dropout = config["dropout"]
+
+    def save_config(self, filename):
+        config = vars(self)
+
+        with open(filename, 'w') as f:
+            json.dump(config, f, indent=2)
+
+    def print_config(self):
+        string = ""
+        for k, v in vars(self).items():
+            string += "{}: {}\n".format(k, v)
+        print(string)
+
 def get_sequences_lengths(sequences, masking=0, dim=1):
     if len(sequences.size()) > 2:
         sequences = sequences.sum(dim=2)
@@ -112,8 +159,7 @@ def load_args(filename, args):
         raise ValueError("no file found at {}".format(filename))
     return checkpoint
 
-def save_checkpoint(filename, best_epoch, best_model, best_optimizer,
-                    epoch, model, optimizer):
+def save_checkpoint(filename, model, optimizer):
     '''
     saves model into a state dict, along with its training statistics,
     and parameters
@@ -126,33 +172,24 @@ def save_checkpoint(filename, best_epoch, best_model, best_optimizer,
     :return:
     '''
     state = {
-        'best_model': best_model.state_dict(),
-        'best_optimizer': best_optimizer.state_dict(),
         'model': model.state_dict(),
         'optimizer' : optimizer.state_dict(),
-        'best_epoch': best_epoch,
-        'epoch' : epoch,
         }
     torch.save(state, filename)
 
-def load_checkpoint(filename, model, optimizer, use_best_model = True):
+def load_checkpoint(filename, model, optimizer):
     '''
     loads previous model
     :param filename: file name of model
     :param model: model that contains same parameters of the one you are loading
     :param optimizer:
-    :param use_best_model: true if you want to use the model with the lowest
-        val loss
     :return: loaded model, checkpoint
     '''
     if os.path.isfile(filename):
         checkpoint = torch.load(filename)
-        if use_best_model:
-            model.load_state_dict(checkpoint['best_model'])
-            optimizer.load_state_dict(checkpoint['best_optimizer'])
-        else:
-            model.load_state_dict(checkpoint['model'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
+
+        model.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
     return model, optimizer
 
 
