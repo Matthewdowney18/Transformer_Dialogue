@@ -1,18 +1,24 @@
 import argparse
 
-from operator import ModelOperator
+from model_operator import ModelOperator
 
 
 def main():
     parser = argparse.ArgumentParser()
     # good arguments
     parser.add_argument("-dataset_filename",
-                        default="data_2",
+                        default="data/reformatted_data/data_all",
+                        #default="debug_data",
                         type = str,
                         required = False,
                         help = "The input data dir. Should contain the csv for the task.")
-    parser.add_argument("-output_dir",
-                        default="output_1/",
+    parser.add_argument("-experiment_dir",
+                        default="exp_4/",
+                        type=str,
+                        required=False,
+                        help="The output data dir")
+    parser.add_argument("-run_name",
+                        default="run_0/",
                         type=str,
                         required=False,
                         help="The output data dir")
@@ -22,12 +28,13 @@ def main():
                         required=False,
                         help="filename of saved model. say None to train new model")
     parser.add_argument("-num_epoch",
-                        default=20,
+                        default=100,
                         type=int,
                         required=False,
                         help="The number of training epochs")
     parser.add_argument("-a_nice_note",
-                        default="first real train attempt",
+                        default="average the loss to try to make it better. "
+                        "trying to get it to stop outputting eos only",
                         type=str,
                         required=False,
                         help="leave a nice lil note for yourself in the future")
@@ -49,22 +56,22 @@ def main():
                         required=False,
                         help="The minimum amount of instances to be in vocab")
     parser.add_argument("-train_batch_size",
-                        default=50,
+                        default=200,
                         type=int,
                         required=False,
                         help="The batch size for training")
     parser.add_argument("-val_batch_size",
-                        default=10,
+                        default=30,
                         type=int,
                         required=False,
                         help="The batch size for training")
     parser.add_argument("-history_len",
-                        default=100,
+                        default=50,
                         type=int,
                         required=False,
                         help="The max length of the history")
     parser.add_argument("-response_len",
-                        default=30,
+                        default=10,
                         type=int,
                         required=False,
                         help="The max length of the response")
@@ -119,7 +126,7 @@ def main():
 
     # optimizer specs
     parser.add_argument("-warmup_steps",
-                        default=1,
+                        default=4000,
                         type=int,
                         required=False,
                         help="The warmup steps for optimizer")
@@ -129,12 +136,11 @@ def main():
                         required=False,
                         help="The batch size for training")
 
-
     args = parser.parse_args()
 
     model_operator = ModelOperator(args)
 
-    model_operator.train(3)
+    model_operator.train(args.num_epoch)
 
 if __name__ == '__main__':
     main()
