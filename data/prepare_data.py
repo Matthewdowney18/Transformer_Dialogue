@@ -33,6 +33,13 @@ def get_line(soup):
         valid = 1
         text = token.text
         text.lower()
+        if text == 're': text = 'are'
+        if text == 's': text = 'is'
+        if text == 'm': text = 'am'
+        if text == 't': text = 'not'
+        if text == 've': text = 'have'
+        if text == 'il': text = 'will'
+        text = text.replace('n\'', '')
         text = text.replace('\' ', '')
         text = text.replace('\'', '')
         text = text.replace('"', '')
@@ -107,14 +114,14 @@ def main():
                         required=False,
                         help="The input data dir. Should contain the xml for the task.")
     parser.add_argument("-output_dir",
-                        default="/home/mattd/PycharmProjects/transformer_dialogue/data/reformatted_data/romance_data/",
+                        default="/home/mattd/PycharmProjects/transformer_dialogue/data/reformatted_data/data_6/",
                         type=str,
                         required=False,
                         help="The output data dir.")
     parser.add_argument("-genres",
                         #default=["Comedy", "Romance", "Drama", "Adventure", "Western", "Action", "Film-Noir", "Thriller", "Mystery"],
-                        #default=["all"],
-                        default=["Romance"],
+                        default=["all"],
+                        #default=["Romance"],
                         type=list,
                         required=False,
                         help="The genres you would like to use.")
@@ -131,7 +138,7 @@ def main():
                         type=tuple,
                         help="the ratios for train val test split")
     parser.add_argument("-a_nice_note",
-                        default="yuuuge",
+                        default="no more overlap between movies in the train/test, better scraping",
                         type=str,
                         required=False,
                         help="leave a nice lil note for yourself in the future")
@@ -153,7 +160,7 @@ def main():
     meta_data["genres"] = dict()
 
     movie_id = 0
-    all_dialogues = list()
+    all_movies = dict()
 
     # create dialogues for each movie
     for genre in args.genres:
@@ -173,23 +180,34 @@ def main():
 
                 dailogues = create_dialogues(soup.find("document"),
                     args.max_history_tokens, args.max_time_interval, movie_id)
-                all_dialogues+=dailogues
+                all_movies[dailogues[0][0]] =dailogues
 
                 movie_data["length"] = len(dailogues)
                 meta_data["genres"][genre][year][movie_name] = movie_data
                 movie_id+=1
 
+    # shuffle dataset
+    random.shuffle(all_movies)
+
+    # create fake list of dialogue indeces to shuffle and split stories
+    all_dialogues = list()
+    for i, movie in enumerate(all_movies.values()):
+        all_dialogues += [i]*len(movie)
+
     meta_data["total_len"] = len(all_dialogues)
 
-    # shuffle dataset
-    random.shuffle(all_dialogues)
+    train_end = all_dialogues[int(len(all_dialogues)*args.train_val_test_split[0])]
+    test_len = all_dialogues[int(len(all_dialogues)*args.train_val_test_split[2])]
 
-    train_end = int(len(all_dialogues)*args.train_val_test_split[0])
-    test_len = int(len(all_dialogues)*args.train_val_test_split[2])
-
-    train_set = all_dialogues[:train_end]
-    val_set = all_dialogues[train_end:-test_len]
-    test_set = all_dialogues[-test_len:]
+    train_set = list()
+    val_set = list()
+    test_set = list()
+    for i in range(0, train_end):
+        for movie in all_movies[i]:train_set.append(movie)
+    for i in range(train_end, len(all_movies)-test_len):
+        for movie in all_movies[i]: val_set.append(movie)
+    for i in range(len(all_movies)-test_len, len(all_movies)):
+        for movie in all_movies[i]: test_set.append(movie)
 
     meta_data["train_len"] = len(train_set)
     meta_data["val_len"] = len(val_set)
