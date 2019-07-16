@@ -27,17 +27,24 @@ def main():
                         type=int,
                         required=False,
                         help="4 the beam search")
-
-    parser.add_argument("-device",
-                        default="cuda",
-                        type=str,
-                        required=False,
-                        help="cuda, cpu")
     parser.add_argument("-choose_best",
                         default=True,
                         type=bool,
                         required=False,
                         help="cuda, cpu")
+
+    # device
+    parser.add_argument("-device",
+                        default="cuda",
+                        type=str,
+                        required=False,
+                        help="cuda, cpu")
+
+    parser.add_argument("-token",
+                        default=None,
+                        type=str,
+                        required=False,
+                        help="token for telegram chatbot")
 
     args = parser.parse_args()
 
