@@ -32,7 +32,7 @@ def get_line(soup):
     for token in soup.find_all("w"):
         valid = 1
         text = token.text
-        text.lower()
+        text = text.lower()
         if text == 're': text = 'are'
         if text == 's': text = 'is'
         if text == 'm': text = 'am'
@@ -130,7 +130,7 @@ def main():
                         type=int,
                         help="the maximum amout of history tokens")
     parser.add_argument("-max_time_interval",
-                        default=7,
+                        default=5,
                         type=int,
                         help="the interval between responses to be considered dialogue")
     parser.add_argument("-train_val_test_split",
@@ -138,7 +138,7 @@ def main():
                         type=tuple,
                         help="the ratios for train val test split")
     parser.add_argument("-a_nice_note",
-                        default="no more overlap between movies in the train/test, better scraping",
+                        default="lowercase",
                         type=str,
                         required=False,
                         help="leave a nice lil note for yourself in the future")

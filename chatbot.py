@@ -46,6 +46,7 @@ class TelegramBot:
 class ChatBot:
     def __init__(self, args):
         # get the dir with pre-trained model
+
         load_dir = os.path.join(args.experiment_dir, args.old_model_dir)
 
         # initialize, and load vocab
@@ -102,30 +103,52 @@ class ChatBot:
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             level=logging.INFO)
 
-        # initialize history that is a list of sentences
-        history = list()
+        greeting_text = "Hello! I am the Hawkbot!  Please dont hurt my feelings." \
+                        "  If you would like to reset "\
+                        "the conversation, please type '/reset'."
+
+        # initialize history dictionary for each chat id
+        history = dict()
 
         def greeting(bot, update):
-            """Greet the user and ask for their name."""
-            bot.send_message(update.message.chat_id,
-                                    "Hello there!")
+            # reset history, or create new history for chat id
+            if update.message.chat_id in history:
+                id = "{}_history".format(update.message.chat_id)
+                if id in history:
+                    history[id].append(history[update.message.chat_id])
+                else:
+                    history[id] = [history[update.message.chat_id]]
+                history[update.message.chat_id].clear()
+            else:
+                history[update.message.chat_id] = list()
+
+            # send a message
+            bot.send_message(update.message.chat_id, greeting_text)
 
         def respond(bot, update):
-            """Whatever the user says, reverse their
-             message and repeat it back to them."""
-            message = update.message.text
-            history.append(message)
-            response = self._print_response(history)
-            history.append(response)
-            bot.send_message(update.message.chat_id,
-                                    response)
+            # initialize history for chat if it doesnt exist
+            if update.message.chat_id not in history:
+                greeting(bot, update)
+            else:
+                # get message, and add to history
+                message = update.message.text
+                history[update.message.chat_id].append(message)
+                # get response, and add to history
+                response = self._print_response(history[update.message.chat_id])
+                history[update.message.chat_id].append(response)
+                # send response from user
+                bot.send_message(update.message.chat_id, response)
+
+                with open(self.args.save_filename, 'w') as f:
+                    json.dump({"history": history, "args": vars(self.args)},
+                              f, indent=4)
 
         # queries sent to: https://api.telegram.org/bot<token>/METHOD_NAME
         TOKEN = self.args.token
 
         bot = TelegramBot(TOKEN)
         bot.add_handler(MessageHandler(Filters.text, respond))
-        bot.add_handler(CommandHandler('start', greeting))
+        bot.add_handler(CommandHandler('reset', greeting))
 
     # print the response from the input
     def _print_response(self, history):
@@ -137,7 +160,7 @@ class ChatBot:
             response = responses[0][0]
         else:
             # pick a random result from the n_best
-            idx = random.randint(0, max(self.args.n_best,
+            idx = random.randint(0, min(self.args.n_best,
                                         self.args.beam_size) - 1)
             response = responses[0][idx]
 
@@ -150,7 +173,6 @@ class ChatBot:
             token = self.vocab.id2token[idx]
             output += "{} ".format(token)
         print(f'{history[-1]} -> {output}')
-        history.append(output)
         return output
 
     def _generate_responses(self, history):
