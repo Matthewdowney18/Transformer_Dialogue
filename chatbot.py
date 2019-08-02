@@ -3,9 +3,11 @@ import os
 import json
 import torch
 import logging
+import re
 import numpy as np
 import random
 from nltk.tokenize import TweetTokenizer
+import nltk.data
 
 # the telegram package holds everything we need for this tutorial
 import telegram
@@ -19,6 +21,25 @@ from transformer.Optim import ScheduledOptim
 from dataset import DialogueDataset, Vocab
 from transformer.Translator import Chatbot
 
+
+def clean_response(response):
+    substitutions = [(r' </s>', r''),
+                     (r' \.', '.'),
+                     (r' !', r'!'),
+                     (r' \?', r'?'),
+                     (r' ,', r'?'),
+                     (r' i ', r' I ')]
+                     #('[.|!|?] *[a-z]', )]
+
+    for (pattern, replacement) in substitutions:
+        response = re.sub(pattern, replacement, response)
+
+    sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+
+    sentences = sent_tokenizer.tokenize(response)
+    sentences = [sent.capitalize() for sent in sentences]
+    response = ' '.join(sentences)
+    return response
 
 class TelegramBot:
     def __init__(self, token):
@@ -137,7 +158,7 @@ class ChatBot:
                 response = self._print_response(history[update.message.chat_id])
                 history[update.message.chat_id].append(response)
                 # send response from user
-                bot.send_message(update.message.chat_id, response)
+                bot.send_message(update.message.chat_id, clean_response(response))
 
                 with open(self.args.save_filename, 'w') as f:
                     json.dump({"history": history, "args": vars(self.args)},
