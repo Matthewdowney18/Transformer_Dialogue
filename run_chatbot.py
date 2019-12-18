@@ -6,20 +6,27 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-experiment_dir",
-                        default="experiments/exp_8",
+                        default="experiments/exp_9",
                         type=str,
                         required=False,
                         help="The output data dir")
     parser.add_argument("-old_model_dir",
-                        default="run_8",
+                        default="run_6",
+                        type=str,
+                        required=False,
+                        help="filename of saved model. say None to train new model")
+    parser.add_argument("-old_model_name",
+                        default="model_3000.bin",
                         type=str,
                         required=False,
                         help="filename of saved model. say None to train new model")
     parser.add_argument("-save_filename",
-                        default="chatbot_history/history_2",
+                        #default="chatbot_history/history_e9_r6_3700",
+                        default="chatbot_history/history_5",
                         type=str,
                         required=False,
                         help="filename of saved model. say None to train new model")
+
 
 
     # for the beam search

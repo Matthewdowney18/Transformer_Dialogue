@@ -1,40 +1,41 @@
 import argparse
 
-from model_operator import ModelOperator
+from src.model_operator import ModelOperator
 
 
 def main():
     parser = argparse.ArgumentParser()
     # good arguments
     parser.add_argument("-dataset_filename",
-                        default="data/reformatted_data/data_all",
-                        #default="debug_data",
-                        type = str,
+                        #default="opensubtitles_data/reformatted_data/data_8",
+                        default="Persona-Chat/reformatted_data/data_1",
+                        type=str,
                         required = False,
                         help = "The input data dir. Should contain the csv for the task.")
     parser.add_argument("-experiment_dir",
-                        default="exp_4/",
+                        default="experiments/exp_9/",
                         type=str,
                         required=False,
                         help="The output data dir")
     parser.add_argument("-run_name",
-                        default="run_0/",
+                        default="run_4/",
                         type=str,
                         required=False,
                         help="The output data dir")
     parser.add_argument("-old_model_dir",
-                        default=None,
+                        #default="experiments/exp_9/run_3/",
+                        default= "experiments/exp_8/run_6",
+                        #default=None,
                         type=str,
                         required=False,
                         help="filename of saved model. say None to train new model")
     parser.add_argument("-num_epoch",
-                        default=100,
+                        default=5000,
                         type=int,
                         required=False,
                         help="The number of training epochs")
     parser.add_argument("-a_nice_note",
-                        default="average the loss to try to make it better. "
-                        "trying to get it to stop outputting eos only",
+                        default="first 10 of pc",
                         type=str,
                         required=False,
                         help="leave a nice lil note for yourself in the future")
@@ -51,7 +52,7 @@ def main():
                         required=False,
                         help="True to train model")
     parser.add_argument("-min_count",
-                        default=1,
+                        default=2,
                         type=int,
                         required=False,
                         help="The minimum amount of instances to be in vocab")
@@ -61,17 +62,17 @@ def main():
                         required=False,
                         help="The batch size for training")
     parser.add_argument("-val_batch_size",
-                        default=30,
+                        default=50,
                         type=int,
                         required=False,
                         help="The batch size for training")
     parser.add_argument("-history_len",
-                        default=50,
+                        default=100,
                         type=int,
                         required=False,
                         help="The max length of the history")
     parser.add_argument("-response_len",
-                        default=10,
+                        default=25,
                         type=int,
                         required=False,
                         help="The max length of the response")
@@ -119,7 +120,7 @@ def main():
                         required=False,
                         help="not really sure what v is")
     parser.add_argument("-dropout",
-                        default=.1,
+                        default=.3,
                         type=float,
                         required=False,
                         help="dropout probability")
@@ -131,7 +132,7 @@ def main():
                         required=False,
                         help="The warmup steps for optimizer")
     parser.add_argument("-label_smoothing",
-                        default=True,
+                        default=False,
                         type=bool,
                         required=False,
                         help="The batch size for training")

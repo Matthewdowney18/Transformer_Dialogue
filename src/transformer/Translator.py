@@ -4,15 +4,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from transformer.Models import Transformer
-from transformer.Beam import Beam
+from src.transformer import Beam
 
 class Chatbot(object):
     ''' Load with trained model and handle the beam search '''
 
     def __init__(self, config, model):
         self.config = config
-        self.device = torch.device(config["device"])
+        self.device = torch.device(config.device)
 
         model.word_prob_prj = nn.LogSoftmax(dim=1)
 
@@ -115,7 +114,7 @@ class Chatbot(object):
             src_enc, *_ = self.model.encoder(src_seq, src_pos, src_seg)
 
             #-- Repeat data for beam search
-            n_bm = self.config["beam_size"]
+            n_bm = self.config.beam_size
             n_inst, len_s, d_h = src_enc.size()
             src_seq = src_seq.repeat(1, n_bm).view(n_inst * n_bm, len_s)
             src_enc = src_enc.repeat(1, n_bm, 1).view(n_inst * n_bm, len_s, d_h)
@@ -128,7 +127,7 @@ class Chatbot(object):
             inst_idx_to_position_map = get_inst_idx_to_tensor_position_map(active_inst_idx_list)
 
             #-- Decode
-            for len_dec_seq in range(1, self.config["response_len"] + 1):
+            for len_dec_seq in range(1, self.config.response_len + 1):
 
                 active_inst_idx_list = beam_decode_step(
                     inst_dec_beams, len_dec_seq, src_seq, src_enc, inst_idx_to_position_map, n_bm)
@@ -139,6 +138,6 @@ class Chatbot(object):
                 src_seq, src_enc, inst_idx_to_position_map = collate_active_info(
                     src_seq, src_enc, inst_idx_to_position_map, active_inst_idx_list)
 
-        batch_hyp, batch_scores = collect_hypothesis_and_scores(inst_dec_beams, self.config["n_best"])
+        batch_hyp, batch_scores = collect_hypothesis_and_scores(inst_dec_beams, self.config.n_best)
 
         return batch_hyp, batch_scores

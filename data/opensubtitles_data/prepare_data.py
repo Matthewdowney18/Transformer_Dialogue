@@ -114,7 +114,7 @@ def main():
                         required=False,
                         help="The input data dir. Should contain the xml for the task.")
     parser.add_argument("-output_dir",
-                        default="/home/mattd/PycharmProjects/transformer_dialogue/data/reformatted_data/data_6/",
+                        default="/home/mattd/PycharmProjects/transformer_dialogue/opensubtitles_data/reformatted_data/data_8/",
                         type=str,
                         required=False,
                         help="The output data dir.")
@@ -144,6 +144,9 @@ def main():
                         help="leave a nice lil note for yourself in the future")
 
     args = parser.parse_args()
+
+    if not os.path.exists(args.output_dir):
+        os.mkdir(args.output_dir)
 
     if args.genres == ["all"]:
         args.genres = list()
@@ -212,9 +215,6 @@ def main():
     meta_data["train_len"] = len(train_set)
     meta_data["val_len"] = len(val_set)
     meta_data["test_len"] = len(test_set)
-
-    if not os.path.exists(args.output_dir):
-        os.mkdir(args.output_dir)
 
     with open(os.path.join(args.output_dir, "meta_data"), 'w') as fp:
         json.dump(meta_data, fp, indent=4, sort_keys=True)

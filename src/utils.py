@@ -3,24 +3,25 @@ import torch
 from torch.autograd import Variable
 import os
 import json
-from torch.nn import Parameter
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from nltk.translate import bleu_score
 import torch.nn.functional as F
-import transformer
 
 
 class ModelConfig:
     def __init__(self, args):
+        self.experiment_dir = args.experiment_dir
+        self.run_name = args.run_name
+        self.old_model_dir = args.old_model_dir
+
         self.history_len = args.history_len
         self.response_len = args.response_len
         self.embedding_dim = args.embedding_dim
         self.model_dim = args.model_dim
-        self.inner_dim = args.inner_dim,
-        self.num_layers = args.num_layers,
-        self.num_heads = args.num_heads,
-        self.dim_k = args.dim_k,
-        self.dim_v = args.dim_v,
+        self.inner_dim = args.inner_dim
+        self.num_layers = args.num_layers
+        self.num_heads = args.num_heads
+        self.dim_k = args.dim_k
+        self.dim_v = args.dim_v
         self.dropout = args.dropout
 
         self.min_count = args.min_count
@@ -47,15 +48,15 @@ class ModelConfig:
 
     def save_config(self, filename):
         config = vars(self)
-
         with open(filename, 'w') as f:
             json.dump(config, f, indent=2)
 
-    def print_config(self):
+    def print_config(self, writer):
         string = ""
         for k, v in vars(self).items():
             string += "{}: {}\n".format(k, v)
         print(string)
+        writer.add_text("config", string)
 
 def get_sequences_lengths(sequences, masking=0, dim=1):
     if len(sequences.size()) > 2:
@@ -177,7 +178,7 @@ def save_checkpoint(filename, model, optimizer):
         }
     torch.save(state, filename)
 
-def load_checkpoint(filename, model, optimizer):
+def load_checkpoint(filename, model, optimizer, device):
     '''
     loads previous model
     :param filename: file name of model
@@ -186,10 +187,11 @@ def load_checkpoint(filename, model, optimizer):
     :return: loaded model, checkpoint
     '''
     if os.path.isfile(filename):
-        checkpoint = torch.load(filename)
+        checkpoint = torch.load(filename, map_location=device)
 
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
+        print("model_loaded")
     return model, optimizer
 
 
@@ -259,7 +261,7 @@ def cal_performance(pred, gold, smoothing=False):
 
     pred = pred.max(1)[1]
     gold = gold.contiguous().view(-1)
-    non_pad_mask = gold.ne(transformer.Constants.PAD)
+    non_pad_mask = gold.ne(src.transformer.Constants.PAD)
     n_correct = pred.eq(gold)
     n_correct = n_correct.masked_select(non_pad_mask).sum().item()
 
@@ -279,10 +281,10 @@ def cal_loss(pred, gold, smoothing):
         one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
         log_prb = F.log_softmax(pred, dim=1)
 
-        non_pad_mask = gold.ne(transformer.Constants.PAD)
+        non_pad_mask = gold.ne(src.transformer.Constants.PAD)
         loss = -(one_hot * log_prb).sum(dim=1)
-        loss = loss.masked_select(non_pad_mask).sum()  # average later
+        loss = loss.masked_select(non_pad_mask).mean()  # average later
     else:
-        loss = F.cross_entropy(pred, gold, ignore_index=transformer.Constants.PAD, reduction='sum')
+        loss = F.cross_entropy(pred, gold, ignore_index=src.transformer.Constants.PAD, reduction='mean')
 
     return loss

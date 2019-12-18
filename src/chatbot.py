@@ -1,12 +1,9 @@
-import argparse
 import os
 import json
 import torch
 import logging
 import re
-import numpy as np
 import random
-from nltk.tokenize import TweetTokenizer
 import nltk.data
 
 # the telegram package holds everything we need for this tutorial
@@ -15,11 +12,9 @@ from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler, Filters
 
-import transformer
-from transformer.Models import Transformer
-from transformer.Optim import ScheduledOptim
+from src.transformer import Transformer
 from dataset import DialogueDataset, Vocab
-from transformer.Translator import Chatbot
+from src.transformer import Chatbot
 
 
 def clean_response(response):
@@ -35,7 +30,6 @@ def clean_response(response):
         response = re.sub(pattern, replacement, response)
 
     sent_tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
-
     sentences = sent_tokenizer.tokenize(response)
     sentences = [sent.capitalize() for sent in sentences]
     response = ' '.join(sentences)
@@ -110,7 +104,7 @@ class ChatBot:
         ).to(self.device)
 
         # load checkpoint
-        checkpoint = torch.load(os.path.join(load_dir, "model.bin"),
+        checkpoint = torch.load(os.path.join(load_dir, args.old_model_name),
                                 map_location=self.device)
         model.load_state_dict(checkpoint['model'])
 
@@ -124,9 +118,10 @@ class ChatBot:
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             level=logging.INFO)
 
-        greeting_text = "Hello! I am the Hawkbot!  Please dont hurt my feelings." \
+        greeting_text = "Hello! I am the Hawkbot! Let me tell you about myself" \
+            "... please dont hurt my feelings!" \
                         "  If you would like to reset "\
-                        "the conversation, please type '/reset'."
+                        "the conversation, please type '/reset'. "
 
         # initialize history dictionary for each chat id
         history = dict()

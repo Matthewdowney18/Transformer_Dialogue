@@ -2,16 +2,14 @@ import os
 import time
 import torch
 from torch.utils.tensorboard import SummaryWriter
-import torchvision
 import numpy as np
 import json
 import random
 from tqdm import tqdm
 
-from utils import ModelConfig, load_checkpoint, cal_performance, bleu
-import transformer
-from transformer.Models import Transformer
-from transformer.Optim import ScheduledOptim
+from src.utils import ModelConfig, load_checkpoint, cal_performance, bleu
+from src.transformer import Transformer
+from src.transformer import ScheduledOptim
 from dataset import DialogueDataset, Vocab
 
 class ModelOperator:
@@ -45,9 +43,10 @@ class ModelOperator:
                 os.path.join(self.load_dir, "config.json"))
 
             # create vocab
-            self.vocab = Vocab
+            self.vocab = Vocab()
             self.vocab.load_from_dict(os.path.join(self.load_dir, "vocab.json"))
             self.update_vocab = False
+            self.config.min_count=1
         else:
             self.use_old_model = False
 
@@ -60,36 +59,39 @@ class ModelOperator:
         # train
         self.train_dataset = DialogueDataset(
             os.path.join(self.dataset_filename, "train.csv"),
-            self.config.min_count,
             self.config.history_len,
             self.config.response_len,
             self.vocab,
             self.update_vocab)
         self.data_loader_train = torch.utils.data.DataLoader(
             self.train_dataset, self.config.train_batch_size, shuffle=True)
+        self.config.train_len = len(self.train_dataset)
 
         self.vocab = self.train_dataset.vocab
 
         # eval
         self.val_dataset = DialogueDataset(
             os.path.join(self.dataset_filename, "val.csv"),
-            self.config.min_count,
             self.config.history_len,
             self.config.response_len,
             self.vocab,
             self.update_vocab)
         self.data_loader_val = torch.utils.data.DataLoader(
             self.val_dataset, self.config.val_batch_size, shuffle=True)
+        self.config.val_len = len(self.val_dataset)
 
         # update, and save vocab
         self.vocab = self.val_dataset.vocab
         self.train_dataset.vocab = self.vocab
+        if (self.config.min_count > 1):
+            self.config.old_vocab_size = len(self.vocab)
+            self.vocab.prune_vocab(self.config.min_count)
         self.vocab.save_to_dict(os.path.join(self.output_dir, "vocab.json"))
         self.vocab_size = len(self.vocab)
         self.config.vocab_size = self.vocab_size
 
         # print and save the config file
-        self.config.print_config()
+        self.config.print_config(self.writer)
         self.config.save_config(os.path.join(self.output_dir, "config.json"))
 
         # set device
@@ -109,7 +111,7 @@ class ModelOperator:
             d_k=self.config.dim_k,
             d_v=self.config.dim_v,
             dropout=self.config.dropout
-        )
+        ).to(self.device)
 
         # create optimizer
         self.optimizer = torch.optim.Adam(
@@ -119,20 +121,22 @@ class ModelOperator:
         # load old model, optimizer if there is one
         if self.use_old_model:
             self.model, self.optimizer = load_checkpoint(
-                self.load_dir, self.model, self.optimizer)
+                os.path.join(self.load_dir, "model.bin"),
+                self.model, self.optimizer, self.device)
+
 
         # create a sceduled optimizer object
         self.optimizer = ScheduledOptim(
             self.optimizer, self.config.model_dim, self.config.warmup_steps)
 
-        self.model = self.model.to(self.device)
+        #self.optimizer.optimizer.to(torch.device('cpu'))
 
 
     def train(self, num_epochs):
         metrics = {"best_epoch":0, "lowest_loss":99999999999999}
 
         # output an example
-        self.output_example(0)
+        #self.output_example(0)
 
         for epoch in range(num_epochs):
            # self.writer.add_graph(self.model)
@@ -156,10 +160,13 @@ class ModelOperator:
                 json.dump(metrics, f, indent=4)
 
             # save checkpoint
-            if epoch_metrics["val"]["loss"] < metrics["lowest_loss"]:
-                self.save_checkpoint(os.path.join(self.output_dir, "model.bin"))
-                metrics["lowest_loss"] = epoch_metrics["val"]["loss"]
-                metrics["best_epoch"] = epoch
+            #TODO: fix this b
+            #if epoch_metrics["val"]["loss"] < metrics["lowest_loss"]:
+            #if epoch_metrics["train"]["loss"] < metrics["lowest_loss"]:
+            if epoch % 100 == 0:
+                self.save_checkpoint(os.path.join(self.output_dir, "model_{}.bin".format(epoch)))
+                #metrics["lowest_loss"] = epoch_metrics["train"]["loss"]
+                #metrics["best_epoch"] = epoch
 
             # record metrics to tensorboard
             self.writer.add_scalar("training loss total",
@@ -187,7 +194,7 @@ class ModelOperator:
                 epoch_metrics["val"]["bleu_2"], global_step=epoch)
 
             # output an example
-            self.output_example(epoch+1)
+            #self.output_example(epoch+1)
 
         self.writer.close()
 
@@ -248,7 +255,7 @@ class ModelOperator:
             epoch_bleu_2.append(bleu(gold, output, 2))
 
             # get_accuracy
-            non_pad_mask = gold.ne(transformer.Constants.PAD)
+            non_pad_mask = gold.ne(src.transformer.Constants.PAD)
             n_word = non_pad_mask.sum().item()
             n_word_total += n_word
             n_word_correct += n_correct
